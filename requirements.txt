@@ -1,3 +1,4 @@
+
 aiogram
-gradio_client
+gradio-client
 aiohttp
