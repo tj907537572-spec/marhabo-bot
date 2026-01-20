@@ -6,8 +6,8 @@ from gradio_client import Client
 from aiohttp import web
 
 # --- КОНФИГУРАЦИЯ ---
-TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "0")) 
+TOKEN = os.getenv("8275988872:AAH8dKL778aKWqs6-WBsussjXuxZP1NXPTA")
+ADMIN_ID = int(os.getenv("6341390660", "0")) 
 
 THEMES = {
     "PSYCHO": {
