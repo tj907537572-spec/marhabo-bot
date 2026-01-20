@@ -8,7 +8,7 @@ from gradio_client import Client
 from aiohttp import web
 
 # ТОКЕН ВСТАВЛЯЕМ СЮДА (в кавычках)
-TOKEN = "8275988872:AAH8dKL778aKWqs6-WBsussjXuxZP1NXPTA"
+TOKEN = "8275988872:AAEUuxKL4fmRPke8U3HYpziS9M3ZJ6UBa_Y"
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
