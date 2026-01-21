@@ -1,85 +1,84 @@
 import asyncio
 import os
+import random
+import requests
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import edge_tts
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import FSInputFile
 from moviepy.editor import VideoFileClip, AudioFileClip
 
-# --- ДАННЫЕ —--
-# Рекомендуется использовать os.getenv("BOT_TOKEN"), но для запуска вставляю ваш:
+# --- НАСТРОЙКИ ---
 TOKEN = "8275988872:AAEUuxKL4fmRPke8U9BvH7p2k6I-M0-yKic"
+PEXELS_API_KEY = "VjznZIGQWVRr2ot6wxiihpdRMdetxpnxIdAiG9NTP5k6ZLCrnRaqBxmL"
 ADMIN_ID = 6341390660
 CHANNEL_ID = "@tvoia_opora"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 scheduler = AsyncIOScheduler()
-
 posts_queue = []
 
-# 1. Функция озвучки
-async def get_voice(text, filename):
-    communicate = edge_tts.Communicate(text, "ru-RU-SvetlanaNeural")
-    await communicate.save(filename)
+# Функция поиска и скачивания видео с Pexels
+async def download_random_video():
+    queries = ['nature', 'calm', 'aesthetic', 'mountains', 'sea', 'forest']
+    query = random.choice(queries)
+    url = f"https://api.pexels.com/videos/search?query={query}&per_page=15&orientation=portrait"
+    headers = {"Authorization": PEXELS_API_KEY}
+    
+    response = requests.get(url, headers=headers).json()
+    video_data = random.choice(response['videos'])
+    # Берем ссылку на мобильное качество, чтобы Render не завис
+    video_url = video_data['video_files'][0]['link']
+    
+    with open("bg_video.mp4", "wb") as f:
+        f.write(requests.get(video_url).content)
+    return "bg_video.mp4"
 
-# 2. Функция для генерации видео
 async def generate_video(text):
-    # ПРОВЕРКА: Если файлов нет, бот выдаст ошибку, но не выключится
-    if not os.path.exists("example_video.mp4"):
-        print("Ошибка: Файл example_video.mp4 не найден!")
-        return None
-        
-    video = VideoFileClip("example_video.mp4")
-    # Здесь логика озвучки должна создавать v.mp3
-    if os.path.exists("v.mp3"):
-        audio = AudioFileClip("v.mp3")
-        final_clip = video.set_audio(audio)
-        final_clip.write_videofile("result_video.mp4", codec="libx264")
-        return "result_video.mp4"
-    return None
-
-# 3. Функция публикации
-async def send_scheduled_post():
-    if posts_queue:
-        video_path = posts_queue.pop(0)
-        if os.path.exists(video_path):
-            video = FSInputFile(video_path)
-            await bot.send_video(chat_id=CHANNEL_ID, video=video, caption="🌿 Твоя минута спокойствия... #психология")
-            print("Пост опубликован!")
-
-# Настройка расписания
-scheduler.add_job(send_scheduled_post, "cron", hour="09,14,20", minute=0)
+    # 1. Озвучка текста
+    communicate = edge_tts.Communicate(text, "ru-RU-SvetlanaNeural")
+    await communicate.save("v.mp3")
+    
+    # 2. Авто-поиск фона
+    bg_path = await download_random_video()
+    
+    # 3. Сборка видео и звука
+    video = VideoFileClip(bg_path)
+    audio = AudioFileClip("v.mp3")
+    
+    # Если видео короче голоса, зацикливаем
+    if video.duration < audio.duration:
+        from moviepy.video.fx.all import loop
+        video = loop(video, duration=audio.duration)
+    
+    final = video.set_audio(audio).set_duration(audio.duration)
+    final.write_videofile("result.mp4", codec="libx264", audio_codec="aac", temp_audiofile='temp-audio.m4a', remove_temp=True)
+    
+    video.close()
+    audio.close()
+    return "result.mp4"
 
 @dp.message(F.text)
 async def handle_text(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-
-    await message.answer("🎙 Начинаю обработку. Подождите...")
+    if message.from_user.id != ADMIN_ID: return
     
-    # Озвучка
-    await get_voice(message.text, "v.mp3")
-    
-    # Генерация
-    video_path = await generate_video(message.text)
-    
-    if video_path:
-        posts_queue.append(video_path) 
-        await message.answer(f"✅ Видео готово и добавлено в очередь. Всего в очереди: {len(posts_queue)}")
-    else:
-        await message.answer("❌ Ошибка: загрузите файл example_video.mp4 на сервер!")
+    status = await message.answer("🔍 Ищу красивый фон и озвучиваю текст...")
+    try:
+        path = await generate_video(message.text)
+        video_file = FSInputFile(path)
+        await bot.send_video(chat_id=message.chat.id, video=video_file, caption="✅ Ваше видео готово!")
+        # Добавляем в очередь для канала
+        posts_queue.append(path)
+    except Exception as e:
+        await status.edit_text(f"❌ Произошла ошибка: {e}")
 
 async def main():
-    # Запуск планировщика внутри main
     scheduler.start()
-    # Запуск бота
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        pass
+    asyncio.run(main())
+
 
     
