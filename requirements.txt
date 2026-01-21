@@ -1,6 +1,6 @@
 aiogram
-gradio-client
-aiohttp
+edge-tts
+apscheduler
 
 
 
