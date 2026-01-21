@@ -9,7 +9,7 @@ from aiogram.types import FSInputFile
 from moviepy.editor import VideoFileClip, AudioFileClip
 
 # --- НАСТРОЙКИ ---
-TOKEN = "8275988872:AAEUuxKL4fmRPke8U9BvH7p2k6I-M0-yKic"
+TOKEN = "8275988872:AAGGPlJAVizjorzcOg8U39QIfjzgCIrxp4c"
 PEXELS_API_KEY = "VjznZIGQWVRr2ot6wxiihpdRMdetxpnxIdAiG9NTP5k6ZLCrnRaqBxmL"
 ADMIN_ID = 6341390660
 CHANNEL_ID = "@tvoia_opora"
