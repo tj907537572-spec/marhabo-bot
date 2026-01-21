@@ -1,8 +1,4 @@
 aiogram
-edge-tts
 apscheduler
-
-
-
-
-
+edge-tts
+moviepy
