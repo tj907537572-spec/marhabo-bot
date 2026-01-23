@@ -10,8 +10,10 @@ from aiogram.types import FSInputFile
 from moviepy.editor import VideoFileClip, AudioFileClip
 
 # --- НАСТРОЙКИ ---
-TOKEN = "8275988872:AAF8J-ORGB3GGaK7KkU9hV0fZb90Za2VoqY"
+# Вставьте сюда свежий токен из BotFather
+TOKEN = "8275988872:AAFO_SAYsfWD_PywJ6RRk8wzmCOwZ41wWGQ" 
 PEXELS_API_KEY = "VjznZIGQWVRr2ot6wxiihpdRMdetxpnxIdAiG9NTP5k6ZLCrnRaqBxmL"
+ADMIN_ID = 6341390660 # Ваш проверенный ID
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -24,16 +26,18 @@ def home():
     return "Бот работает!"
 
 def run_web_server():
+    # Render использует порт 10000 для проверки активности
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     t = Thread(target=run_web_server)
+    t.daemon = True
     t.start()
 
 # --- ФУНКЦИИ СОЗДАНИЯ ВИДЕО ---
 async def download_random_video():
-    queries = ['nature', 'calm', 'aesthetic']
+    queries = ['nature', 'calm', 'mountains', 'aesthetic']
     query = random.choice(queries)
     url = f"https://api.pexels.com/videos/search?query={query}&per_page=15&orientation=portrait"
     headers = {"Authorization": PEXELS_API_KEY}
@@ -47,10 +51,14 @@ async def download_random_video():
     return video_path
 
 async def generate_video(text):
+    # Озвучка текста
     communicate = edge_tts.Communicate(text, "ru-RU-SvetlanaNeural")
     await communicate.save("v.mp3")
+    
+    # Скачивание фона
     bg_path = await download_random_video()
     
+    # Сборка финального видео
     video = VideoFileClip(bg_path)
     audio = AudioFileClip("v.mp3")
     
@@ -65,30 +73,33 @@ async def generate_video(text):
     audio.close()
     return "result.mp4"
 
-# --- ОБРАБОТКА СООБЩЕНИЙ (ВРЕМЕННО ДЛЯ ВСЕХ) ---
+# --- ОБРАБОТКА СООБЩЕНИЙ ---
 @dp.message(F.text)
 async def handle_text(message: types.Message):
-    # Мы убрали 'if', чтобы бот точно увидел ваше сообщение про 'мужество подняться'
-    status = await message.answer("🎬 Вижу сообщение! Начинаю создавать видео...")
-    print(f"Получен текст: {message.text}")
+    # Бот реагирует только на ваш ID
+    if message.from_user.id != ADMIN_ID:
+        return 
+    
+    status = await message.answer("🎬 Вижу цитату! Начинаю создавать видео...")
+    print(f"Админ прислал текст: {message.text}")
     
     try:
         path = await generate_video(message.text)
         video_file = FSInputFile(path)
-        await bot.send_video(chat_id=message.chat.id, video=video_file, caption="✅ Готово!")
+        await bot.send_video(chat_id=message.chat.id, video=video_file, caption="✅ Видео готово!")
         await status.delete()
     except Exception as e:
-        await status.edit_text(f"❌ Ошибка: {e}")
+        await status.edit_text(f"❌ Ошибка при создании: {e}")
+        print(f"Ошибка: {e}")
 
 # --- ЗАПУСК ---
 async def main():
-    # Очищаем очередь старых нажатий /start
+    # Важно: удаляем старые вебхуки, чтобы убрать ошибку Unauthorized
     await bot.delete_webhook(drop_pending_updates=True)
-    print("Бот проснулся и готов к работе!")
+    print("Бот успешно запущен и подключен к Telegram!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    keep_alive() 
-    asyncio.run(main())
-
+    keep_alive() # Запускаем фоновый сервер для Render
+    asyncio.run(main()) # Запускаем бота
 
