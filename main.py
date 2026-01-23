@@ -12,7 +12,6 @@ from moviepy.editor import VideoFileClip, AudioFileClip
 # --- НАСТРОЙКИ ---
 TOKEN = "8275988872:AAEUuxKL4fmRPke8U9BvH7p2k6I-M0-yKic"
 PEXELS_API_KEY = "VjznZIGQWVRr2ot6wxiihpdRMdetxpnxIdAiG9NTP5k6ZLCrnRaqBxmL"
-ADMIN_ID = 6341390660 # Ваш ID из BotFather
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -34,7 +33,7 @@ def keep_alive():
 
 # --- ФУНКЦИИ СОЗДАНИЯ ВИДЕО ---
 async def download_random_video():
-    queries = ['nature', 'calm', 'mountains', 'aesthetic']
+    queries = ['nature', 'calm', 'aesthetic']
     query = random.choice(queries)
     url = f"https://api.pexels.com/videos/search?query={query}&per_page=15&orientation=portrait"
     headers = {"Authorization": PEXELS_API_KEY}
@@ -66,33 +65,30 @@ async def generate_video(text):
     audio.close()
     return "result.mp4"
 
-# --- ОБРАБОТКА СООБЩЕНИЙ ---
+# --- ОБРАБОТКА СООБЩЕНИЙ (ВРЕМЕННО ДЛЯ ВСЕХ) ---
 @dp.message(F.text)
 async def handle_text(message: types.Message):
-    # Проверка вашего ID
-    if message.from_user.id != ADMIN_ID:
-        return 
-    
-    status = await message.answer("🎬 Вижу текст! Начинаю создавать видео...")
-    print(f"Админ прислал текст: {message.text}")
+    # Мы убрали 'if', чтобы бот точно увидел ваше сообщение про 'мужество подняться'
+    status = await message.answer("🎬 Вижу сообщение! Начинаю создавать видео...")
+    print(f"Получен текст: {message.text}")
     
     try:
         path = await generate_video(message.text)
         video_file = FSInputFile(path)
-        await bot.send_video(chat_id=message.chat.id, video=video_file, caption="✅ Видео готово!")
+        await bot.send_video(chat_id=message.chat.id, video=video_file, caption="✅ Готово!")
         await status.delete()
     except Exception as e:
         await status.edit_text(f"❌ Ошибка: {e}")
-        print(f"Ошибка: {e}")
 
 # --- ЗАПУСК ---
 async def main():
-    # Эта строка заставляет бота сбросить старые ошибки и начать слушать вас
+    # Очищаем очередь старых нажатий /start
     await bot.delete_webhook(drop_pending_updates=True)
-    print("Бот успешно запущен и ждет сообщения...")
+    print("Бот проснулся и готов к работе!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    keep_alive() # Запуск сервера для Render
-    asyncio.run(main()) # Запуск бота
+    keep_alive() 
+    asyncio.run(main())
+
 
