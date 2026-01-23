@@ -63,7 +63,7 @@ async def generate_video(text):
 
 @dp.message(F.text)
 async def handle_text(message: types.Message):
-    if message.from_user.id != ADMIN_ID: return
+    if message.from_user.id !=6341390660 : return
     status = await message.answer("🎬 Начинаю создание видео...")
     try:
         path = await generate_video(message.text)
