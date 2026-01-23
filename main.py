@@ -7,26 +7,23 @@ from threading import Thread
 import edge_tts
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import FSInputFile
-from moviepy.editor import VideoFileClip, AudioFileClip
+from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
 
 # --- НАСТРОЙКИ ---
-# Вставьте сюда свежий токен из BotFather
-TOKEN = "8275988872:AAFO_SAYsfWD_PywJ6RRk8wzmCOwZ41wWGQ" 
+TOKEN = "8275988872:AAEUuxKL4fmRPke8U9BvH7p2k6I-M0-yKic" # Убедитесь, что это ваш последний токен
 PEXELS_API_KEY = "VjznZIGQWVRr2ot6wxiihpdRMdetxpnxIdAiG9NTP5k6ZLCrnRaqBxmL"
-ADMIN_ID = 6341390660 # Ваш проверенный ID
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- ВЕБ-СЕРВЕР ДЛЯ RENDER (ПОРТ 10000) ---
+# --- ВЕБ-СЕРВЕР ДЛЯ RENDER ---
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Бот работает!"
+    return "Бот активен!"
 
 def run_web_server():
-    # Render использует порт 10000 для проверки активности
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
@@ -35,9 +32,9 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# --- ФУНКЦИИ СОЗДАНИЯ ВИДЕО ---
+# --- ФУНКЦИИ ВИДЕО ---
 async def download_random_video():
-    queries = ['nature', 'calm', 'mountains', 'aesthetic']
+    queries = ['nature', 'calm', 'dark aesthetic', 'galaxy']
     query = random.choice(queries)
     url = f"https://api.pexels.com/videos/search?query={query}&per_page=15&orientation=portrait"
     headers = {"Authorization": PEXELS_API_KEY}
@@ -51,55 +48,67 @@ async def download_random_video():
     return video_path
 
 async def generate_video(text):
-    # Озвучка текста
-    communicate = edge_tts.Communicate(text, "ru-RU-SvetlanaNeural")
+    # 1. Озвучка текста (Голос)
+    voice = "ru-RU-SvetlanaNeural"
+    communicate = edge_tts.Communicate(text, voice)
     await communicate.save("v.mp3")
     
-    # Скачивание фона
+    # 2. Скачивание видео фона
     bg_path = await download_random_video()
     
-    # Сборка финального видео
+    # 3. Обработка видео и аудио
     video = VideoFileClip(bg_path)
     audio = AudioFileClip("v.mp3")
     
+    # Зацикливаем видео, если оно короче аудио
     if video.duration < audio.duration:
         from moviepy.video.fx.all import loop
         video = loop(video, duration=audio.duration)
     
-    final = video.set_audio(audio).set_duration(audio.duration)
-    final.write_videofile("result.mp4", codec="libx264", audio_codec="aac")
+    video = video.set_audio(audio).set_duration(audio.duration)
+
+    # 4. Добавление субтитров (Текст на экране)
+    # Мы создаем текстовый слой. Если на Render не установлен ImageMagick, текст может не отобразиться.
+    try:
+        txt_clip = TextClip(text, fontsize=40, color='white', font='Arial-Bold', 
+                            method='caption', size=(video.w*0.8, None), stroke_color='black', stroke_width=1)
+        txt_clip = txt_clip.set_position('center').set_duration(audio.duration)
+        final_video = CompositeVideoClip([video, txt_clip])
+    except:
+        print("Ошибка ImageMagick: видео будет без текста, только с голосом.")
+        final_video = video
+
+    # 5. Сохранение
+    final_video.write_videofile("result.mp4", codec="libx264", audio_codec="aac", fps=24)
     
     video.close()
     audio.close()
     return "result.mp4"
 
-# --- ОБРАБОТКА СООБЩЕНИЙ ---
-@dp.message(F.text)
+# --- ОБРАБОТКА СООБЩЕНИЙ (БЕЗ ПРОВЕРКИ ID) ---
+@dp.message()
 async def handle_text(message: types.Message):
-    # Бот реагирует только на ваш ID
-    if message.from_user.id != ADMIN_ID:
-        return 
+    # Теперь бот пишет в логи ВСЁ, что получает
+    print(f"ПОЛУЧЕНО: {message.text} от {message.from_user.id}")
     
-    status = await message.answer("🎬 Вижу цитату! Начинаю создавать видео...")
-    print(f"Админ прислал текст: {message.text}")
+    status = await message.answer("🎬 Начинаю озвучку и создание видео с текстом...")
     
     try:
         path = await generate_video(message.text)
         video_file = FSInputFile(path)
-        await bot.send_video(chat_id=message.chat.id, video=video_file, caption="✅ Видео готово!")
+        await bot.send_video(chat_id=message.chat.id, video=video_file, caption="✅ Ваше видео готово!")
         await status.delete()
     except Exception as e:
-        await status.edit_text(f"❌ Ошибка при создании: {e}")
-        print(f"Ошибка: {e}")
+        await status.edit_text(f"❌ Произошла ошибка: {e}")
+        print(f"ОШИБКА: {e}")
 
 # --- ЗАПУСК ---
 async def main():
-    # Важно: удаляем старые вебхуки, чтобы убрать ошибку Unauthorized
     await bot.delete_webhook(drop_pending_updates=True)
-    print("Бот успешно запущен и подключен к Telegram!")
+    print("Бот запущен и готов создавать видео!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    keep_alive() # Запускаем фоновый сервер для Render
-    asyncio.run(main()) # Запускаем бота
+    keep_alive() 
+    asyncio.run(main())
 
