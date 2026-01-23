@@ -10,7 +10,7 @@ from aiogram.types import FSInputFile
 from moviepy.editor import VideoFileClip, AudioFileClip
 
 # --- НАСТРОЙКИ ---
-TOKEN = "8275988872:AAEUuxKL4fmRPke8U9BvH7p2k6I-M0-yKic"
+TOKEN = "8275988872:AAF8J-ORGB3GGaK7KkU9hV0fZb90Za2VoqY"
 PEXELS_API_KEY = "VjznZIGQWVRr2ot6wxiihpdRMdetxpnxIdAiG9NTP5k6ZLCrnRaqBxmL"
 
 bot = Bot(token=TOKEN)
