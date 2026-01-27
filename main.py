@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFont
 from apscheduler.schedulers.asyncio import AsyncIOScheduler # Добавьте в requirements.txt
 
 # --- НАСТРОЙКИ ---
-TOKEN = "8275988872:AAHpernZv9mZScnQz2nBCkK-yiNfiZLGQhM"
+TOKEN = "8275988872:AAErcRp2_iIAKr8N6fC89VhOoGgR0gx_814"
 PEXELS_API_KEY = "VjznZIGQwVRr2ot6wxiiHpdRMdetxpnxIdAiG9NTP5k6ZLCrnRaqBxml"
 ADMIN_ID = 6341390660
 
