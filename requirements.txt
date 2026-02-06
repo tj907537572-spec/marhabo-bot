@@ -1,11 +1,9 @@
 aiogram
 flask
-edge-tts
-moviepy==1.0.3
 requests
-proglog
-pillow
-gunicorn
+edge-tts
+moviepy
+Pillow
 apscheduler
 
 
