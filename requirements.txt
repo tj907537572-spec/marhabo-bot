@@ -3,5 +3,3 @@ edge-tts
 aiohttp
 aiofiles
 moviepy
-proglog
-
