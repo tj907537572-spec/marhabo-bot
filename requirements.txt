@@ -1,8 +1,6 @@
-aiogram
-apscheduler
+aiogram==3.1.1
 edge-tts
 aiohttp
 aiofiles
-requests
 moviepy==1.0.3
 proglog
