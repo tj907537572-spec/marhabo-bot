@@ -6,13 +6,15 @@ import aiohttp
 import aiofiles
 from flask import Flask
 from threading import Thread
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher
 from aiogram.types import FSInputFile
 import edge_tts
-from moviepy.editor import VideoFileClip, AudioFileClip
+# Исправленные импорты для MoviePy
+from moviepy.video.io.VideoFileClip import VideoFileClip
+from moviepy.audio.io.AudioFileClip import AudioFileClip
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-# --- НАСТРОЙКИ (Берем из переменных окружения) ---
+# --- НАСТРОЙКИ ---
 TOKEN = os.getenv("BOT_TOKEN")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 
@@ -32,9 +34,12 @@ app = Flask(__name__)
 def index(): 
     return "Бот-админ активен!"
 
-# --- АСИНХРОННАЯ ЗАГРУЗКА ВИДЕО ---
+# --- ЗАГРУЗКА ВИДЕО ---
 async def get_pexels_video(query):
-    headers = {"Authorization": PEXELS_API_KEY}
+    headers = {
+        "Authorization": PEXELS_API_KEY,
+        "User-Agent": "Mozilla/5.0"
+    }
     url = f"https://api.pexels.com/videos/search?query={query}&per_page=1&orientation=portrait"
     
     async with aiohttp.ClientSession() as session:
@@ -44,9 +49,9 @@ async def get_pexels_video(query):
                 video_url = data['videos'][0]['video_files'][0]['link']
                 async with session.get(video_url) as video_resp:
                     if video_resp.status == 200:
-                        f = await aiofiles.open("base_video.mp4", mode='wb')
-                        await f.write(await video_resp.read())
-                        await f.close()
+                        content = await video_resp.read()
+                        async with aiofiles.open("base_video.mp4", mode='wb') as f:
+                            await f.write(content)
                         return "base_video.mp4"
     return None
 
@@ -56,18 +61,19 @@ async def create_video_logic(text, category):
     video_path = await get_pexels_video(query)
     if not video_path: return None
     
+    # Озвучка
     communicate = edge_tts.Communicate(text, "ru-RU-SvetlanaNeural")
     await communicate.save("voice.mp3")
     
-    # Обработка видео (MoviePy)
+    # Монтаж
     video = VideoFileClip(video_path).subclip(0, 7)
     audio = AudioFileClip("voice.mp3")
     final_video = video.set_audio(audio)
     
     output = f"result_{category}.mp4"
-    final_video.write_videofile(output, codec="libx264", audio_codec="aac", fps=24)
+    # Параметр temp_audiofile важен для серверов без прав записи в системные папки
+    final_video.write_videofile(output, codec="libx264", audio_codec="aac", fps=24, temp_audiofile=f'temp_{category}.m4a', remove_temp=True)
     
-    # Закрываем файлы, чтобы избежать ошибок памяти
     video.close()
     audio.close()
     return output
@@ -91,17 +97,14 @@ async def auto_post_money():
         logging.error(f"Ошибка в money: {e}")
 
 async def main():
-    # Настройка планировщика
     scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
     scheduler.add_job(auto_post_psy, "cron", hour=9, minute=0)
     scheduler.add_job(auto_post_money, "cron", hour=15, minute=0)
     scheduler.start()
 
-    # Запуск веб-сервера для Render в отдельном потоке
     port = int(os.environ.get("PORT", 10000))
     Thread(target=lambda: app.run(host='0.0.0.0', port=port), daemon=True).start()
 
-    # Запуск бота
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
