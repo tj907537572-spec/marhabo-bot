@@ -5,34 +5,30 @@ import logging
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import FSInputFile
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from edge_tts import Communicate
 import aiohttp
 import aiofiles
 
-# Пытаемся импортировать moviepy аккуратно
+# Пытаемся импортировать инструменты для видео
 try:
-    from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
+    from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip
 except ImportError:
-    from moviepy import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
+    from moviepy import VideoFileClip, AudioFileClip, CompositeVideoClip
 
-# --- НАСТРОЙКИ ---
 TOKEN = os.getenv("BOT_TOKEN")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- ЛОГИКА СОЗДАНИЯ ВИДЕО ---
-async def create_video_logic(text, category="psy"):
-    query = "nature" if category == "psy" else "business"
+async def create_video_logic(text):
     headers = {"Authorization": PEXELS_API_KEY}
-    url = f"https://api.pexels.com/videos/search?query={query}&per_page=15&orientation=portrait"
+    url = "https://api.pexels.com/videos/search?query=nature&per_page=10&orientation=portrait"
     
-    v_in, a_in, v_out = f"v_{category}.mp4", f"a_{category}.mp3", f"final_{category}.mp4"
+    v_in, a_in, v_out = "video_temp.mp4", "audio_temp.mp3", "result.mp4"
 
     try:
-        # 1. Загрузка видео
+        # 1. Качаем фон
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers) as resp:
                 data = await resp.json()
@@ -41,19 +37,18 @@ async def create_video_logic(text, category="psy"):
                     async with aiofiles.open(v_in, mode='wb') as f:
                         await f.write(await vr.read())
 
-        # 2. Озвучка
+        # 2. Делаем голос
         comm = Communicate(text, "ru-RU-SvetlanaNeural")
         await comm.save(a_in)
 
-        # 3. Сборка
+        # 3. Собираем видео
         clip = VideoFileClip(v_in)
-        # Поддержка разных версий moviepy
-        clip = clip.subclipped(0, 8) if hasattr(clip, "subclipped") else clip.subclip(0, 8)
+        # Проверка на версию библиотеки
+        clip = clip.subclip(0, 8) if hasattr(clip, "subclip") else clip.subclipped(0, 8)
         clip = clip.resize(height=1280)
         
         audio = AudioFileClip(a_in)
         final = clip.set_audio(audio)
-        
         final.write_videofile(v_out, codec="libx264", audio_codec="aac", fps=24, logger=None)
         
         clip.close()
@@ -63,29 +58,24 @@ async def create_video_logic(text, category="psy"):
         logging.error(f"Ошибка: {e}")
         return None
 
-# --- ОБРАБОТЧИКИ ---
-
 @dp.message(Command("test"))
 async def test_cmd(message: types.Message):
-    await message.answer("🎬 Начинаю сборку теста...")
-    path = await create_video_logic("Бот работает и видео создается!", "psy")
+    await message.answer("🎬 Собираю видео-тест...")
+    path = await create_video_logic("Бот снова в строю!")
     if path:
-        await bot.send_video(message.chat.id, FSInputFile(path), caption="✅ Тест пройден!")
+        await bot.send_video(message.chat.id, FSInputFile(path))
         if os.path.exists(path): os.remove(path)
     else:
         await message.answer("❌ Ошибка. Проверь логи Render.")
 
 @dp.message(F.text)
-async def handle_any_text(message: types.Message):
-    # Если это не команда, делаем видео
+async def handle_text(message: types.Message):
     if not message.text.startswith('/'):
         await message.answer(f"⏳ Делаю видео на твой текст: «{message.text}»")
-        path = await create_video_logic(message.text, "psy")
+        path = await create_video_logic(message.text)
         if path:
-            await bot.send_video(message.chat.id, FSInputFile(path), caption="✨ Твое видео готово!")
+            await bot.send_video(message.chat.id, FSInputFile(path))
             if os.path.exists(path): os.remove(path)
-        else:
-            await message.answer("❌ Ошибка при создании видео.")
 
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
