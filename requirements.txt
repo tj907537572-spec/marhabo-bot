@@ -1,9 +1,9 @@
 aiogram
 flask
-requests
+aiohttp
+aiofiles
 edge-tts
 moviepy
-Pillow
 apscheduler
 
 
