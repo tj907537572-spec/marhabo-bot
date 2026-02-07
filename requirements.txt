@@ -1,11 +1,8 @@
 aiogram
-flask
+apscheduler
+edge-tts
 aiohttp
 aiofiles
-edge-tts
-moviepy
-apscheduler
-
-
-
-
+requests
+moviepy==1.0.3
+proglog
