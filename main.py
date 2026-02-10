@@ -9,10 +9,10 @@ from edge_tts import Communicate
 import aiohttp
 import aiofiles
 
-# Пытаемся импортировать moviepy максимально надежно для любой версии
+# Умный импорт для любой версии MoviePy
 try:
     from moviepy.editor import VideoFileClip, AudioFileClip
-except ImportError:
+except:
     from moviepy import VideoFileClip, AudioFileClip
 
 TOKEN = os.getenv("BOT_TOKEN")
@@ -22,12 +22,13 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 async def create_video_logic(text, chat_id):
+    # Короткие имена файлов
     v_in, a_in, v_out = f"v_{chat_id}.mp4", f"a_{chat_id}.mp3", f"res_{chat_id}.mp4"
     headers = {"Authorization": PEXELS_API_KEY}
-    url = "https://api.pexels.com/videos/search?query=nature&per_page=15&orientation=portrait"
+    url = "https://api.pexels.com/videos/search?query=nature&per_page=10&orientation=portrait"
 
     try:
-        # 1. Загрузка видео
+        # 1. Скачиваем фон
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers) as resp:
                 data = await resp.json()
@@ -36,54 +37,56 @@ async def create_video_logic(text, chat_id):
                     async with aiofiles.open(v_in, mode='wb') as f:
                         await f.write(await vr.read())
 
-        # 2. Озвучка
+        # 2. Генерируем голос
         comm = Communicate(text, "ru-RU-SvetlanaNeural")
         await comm.save(a_in)
 
-        # 3. Монтаж (Исправляем ошибку subclip/subclipped)
+        # 3. Собираем видео (Универсальный способ для всех версий)
         clip = VideoFileClip(v_in)
         
+        # Решаем проблему с AttributeError: 'VideoFileClip' object has no attribute 'subclip'
         if hasattr(clip, "subclipped"):
-            clip = clip.subclipped(0, 6) # Для новой версии
+            clip = clip.subclipped(0, 6) # Новая версия
         else:
-            clip = clip.subclip(0, 6)    # Для старой версии
+            clip = clip.subclip(0, 6)    # Старая версия
             
-        clip = clip.resize(height=720)
+        clip = clip.resize(height=480) # Снизил до 480p для максимальной скорости на Render
         audio = AudioFileClip(a_in)
         final = clip.set_audio(audio)
         
-        final.write_videofile(v_out, codec="libx264", audio_codec="aac", fps=20, logger=None, threads=1)
+        # Сохранение с минимальной нагрузкой
+        final.write_videofile(v_out, codec="libx264", audio_codec="aac", fps=18, logger=None, threads=1)
         
         clip.close()
         audio.close()
         return v_out
     except Exception as e:
-        logging.error(f"Ошибка монтажа: {e}")
+        logging.error(f"ОШИБКА: {e}")
         return None
     finally:
-        # Чистим мусор сразу
+        # Сразу удаляем черновики
         for f in [v_in, a_in]:
             if os.path.exists(f): os.remove(f)
 
 @dp.message(Command("start"))
-async def start_cmd(message: types.Message):
-    await message.answer("✅ Бот запущен! Пришли текст, и я сделаю видео.")
+async def start(message: types.Message):
+    await message.answer("Привет! Пришли текст — я сделаю видео.")
 
 @dp.message(F.text)
 async def handle_text(message: types.Message):
     if message.text.startswith('/'): return
-    m = await message.answer("⏳ Собираю видео (около 30-40 сек)...")
+    m = await message.answer("⏳ Создаю видео... Подожди 30-40 секунд.")
     path = await create_video_logic(message.text, message.chat.id)
     
-    if path and os.path.exists(path):
+    if path:
         await bot.send_video(message.chat.id, FSInputFile(path))
-        os.remove(path)
+        if os.path.exists(path): os.remove(path)
         await m.delete()
     else:
-        await message.answer("❌ Ошибка. Скорее всего, сервер перегружен.")
+        await message.answer("❌ Ошибка сборки. Попробуй еще раз или текст покороче.")
 
 async def main():
-    # Эта строчка УБИВАЕТ конфликт (выключает другие копии бота)
+    # Эта строчка КРИТИЧЕСКИ важна, она убирает ошибку Conflict (удаляет старые сессии)
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
