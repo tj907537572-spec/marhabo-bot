@@ -16,9 +16,8 @@ CHANNEL_BIZ = os.getenv("CHANNEL_BIZ")
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- ЦИТАТЫ (Психология) ---
-texts_psy = ["Твоё спокойствие — твоя сила.", "Маленькие шаги ведут к результату.", "Верь в себя сегодня."]
-# --- ИДЕИ (Бизнес) ---
+# Цитаты для каналов
+texts_psy = ["Твоё спокойствие — твоя сила.", "Верь в себя сегодня.", "Маленькие шаги ведут к результату."]
 texts_biz = ["Бизнес-идея: ИИ для брендов.", "Стратегия 80/20 — залог роста.", "Инвестируй в свои знания."]
 
 async def create_video_logic(text, chat_id):
@@ -34,17 +33,20 @@ async def create_video_logic(text, chat_id):
                     async with aiofiles.open(v_in, mode='wb') as f:
                         await f.write(await vr.read())
         await Communicate(text, "ru-RU-SvetlanaNeural").save(a_in)
+        
+        # МОНТАЖ БЕЗ RESIZE (чтобы убрать ошибку ANTIALIAS)
         clip = VideoFileClip(v_in)
         duration = min(clip.duration, 8)
-        # ВАЖНО: Убираем resize, чтобы избежать проблем с ANTIALIAS
         clip = clip.subclip(0, duration).without_audio()
+        
         audio = AudioFileClip(a_in)
         final = clip.set_audio(audio)
         final.write_videofile(v_out, codec="libx264", audio_codec="aac", fps=24, logger=None)
+        
         clip.close(); audio.close()
         return v_out
     except Exception as e:
-        logging.error(f"Ошибка монтажа: {e}")
+        logging.error(f"Ошибка: {e}")
         return None
     finally:
         for f in [v_in, a_in]:
@@ -87,7 +89,10 @@ async def main():
     runner = web.AppRunner(app)
     await runner.setup()
     await web.TCPSite(runner, '0.0.0.0', 10000).start()
+    
+    # СБРОС КОНФЛИКТОВ
     await bot.delete_webhook(drop_pending_updates=True) 
+    
     asyncio.create_task(scheduler())
     await dp.start_polling(bot)
 
