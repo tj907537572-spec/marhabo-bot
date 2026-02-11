@@ -9,7 +9,7 @@ from edge_tts import Communicate
 import aiohttp
 import aiofiles
 
-# Пытаемся импортировать moviepy максимально надежно
+# Надежный импорт MoviePy
 try:
     from moviepy.editor import VideoFileClip, AudioFileClip
 except ImportError:
@@ -27,7 +27,7 @@ async def create_video_logic(text, chat_id):
     url = "https://api.pexels.com/videos/search?query=nature&per_page=10&orientation=portrait"
 
     try:
-        # 1. Загрузка фонового видео
+        # 1. Скачиваем фон
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers) as resp:
                 data = await resp.json()
@@ -40,62 +40,62 @@ async def create_video_logic(text, chat_id):
         comm = Communicate(text, "ru-RU-SvetlanaNeural")
         await comm.save(a_in)
 
-        # 3. Монтаж (Исправляем ошибку subclip/subclipped)
+        # 3. Монтаж (решение проблемы AttributeError)
         clip = VideoFileClip(v_in)
         
-        # Проверяем, какая версия библиотеки установлена
+        # Проверка версии библиотеки для команды обрезки
         if hasattr(clip, "subclipped"):
-            clip = clip.subclipped(0, 7) # Новая версия (как просил Render)
+            clip = clip.subclipped(0, 7)
         else:
-            clip = clip.subclip(0, 7)    # Старая версия
+            clip = clip.subclip(0, 7)
             
-        clip = clip.resize(height=480) # 480p, чтобы Render не завис
+        clip = clip.resize(height=480) # Облегчаем задачу серверу Render
         audio = AudioFileClip(a_in)
         final = clip.set_audio(audio)
         
-        # Сохранение видео
+        # Сохранение с минимальной нагрузкой на процессор
         final.write_videofile(v_out, codec="libx264", audio_codec="aac", fps=15, logger=None, threads=1)
         
         clip.close()
         audio.close()
         return v_out
     except Exception as e:
-        logging.error(f"Ошибка монтажа: {e}")
+        logging.error(f"Ошибка создания видео: {e}")
         return None
     finally:
-        # Удаляем временные файлы
+        # Чистим временные файлы
         for f in [v_in, a_in]:
             if os.path.exists(f): os.remove(f)
 
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message):
-    await message.answer("✅ Бот-админ запущен! Пришли текст, и я сделаю видео.")
+    await message.answer("✅ Бот-админ готов к работе! Пришли текст, и я сделаю видео.")
 
 @dp.message(Command("test"))
 async def test_cmd(message: types.Message):
-    m = await message.answer("🎬 Запускаю тест видео... Подожди немного.")
-    path = await create_video_logic("Тестовая проверка прошла успешно!", message.chat.id)
+    m = await message.answer("🎬 Запускаю тест создания видео...")
+    path = await create_video_logic("Тестовое видео для проверки работы бота!", message.chat.id)
     if path:
         await bot.send_video(message.chat.id, FSInputFile(path))
         os.remove(path)
         await m.delete()
     else:
-        await message.answer("❌ Ошибка при создании видео. Проверь логи Render.")
+        await message.answer("❌ Ошибка сборки видео. Проверь логи в Render.")
 
 @dp.message(F.text)
 async def handle_text(message: types.Message):
     if message.text.startswith('/'): return
-    m = await message.answer("⏳ Создаю видео, это займет около 30 секунд...")
+    m = await message.answer("⏳ Создаю видео, это займет около 30-40 секунд...")
     path = await create_video_logic(message.text, message.chat.id)
     if path:
         await bot.send_video(message.chat.id, FSInputFile(path))
         os.remove(path)
         await m.delete()
     else:
-        await message.answer("❌ Не удалось создать видео. Попробуй текст покороче.")
+        await message.answer("❌ Ошибка при создании видео. Попробуй текст покороче.")
 
 async def main():
-    # Эта строка убивает ошибку Conflict и удаляет старые сообщения
+    # РЕШЕНИЕ ОШИБКИ CONFLICT: сбрасываем старые обновления
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
