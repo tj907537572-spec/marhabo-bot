@@ -16,9 +16,8 @@ CHANNEL_BIZ = os.getenv("CHANNEL_BIZ")
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Цитаты для каналов
-texts_psy = ["Твоё спокойствие — твоя сила.", "Верь в себя сегодня.", "Маленькие шаги ведут к результату."]
-texts_biz = ["Бизнес-идея: ИИ для брендов.", "Стратегия 80/20 — залог роста.", "Инвестируй в свои знания."]
+texts_psy = ["Твоё спокойствие — твоя сила.", "Счастье внутри тебя.", "Верь в свой путь."]
+texts_biz = ["Бизнес-идея: ИИ-сервисы.", "Стратегия 80/20 для роста.", "Инвестируй в навыки."]
 
 async def create_video_logic(text, chat_id):
     v_in, a_in, v_out = f"v_{chat_id}.mp4", f"a_{chat_id}.mp3", f"res_{chat_id}.mp4"
@@ -34,11 +33,8 @@ async def create_video_logic(text, chat_id):
                         await f.write(await vr.read())
         await Communicate(text, "ru-RU-SvetlanaNeural").save(a_in)
         
-        # МОНТАЖ БЕЗ RESIZE (чтобы убрать ошибку ANTIALIAS)
-        clip = VideoFileClip(v_in)
-        duration = min(clip.duration, 8)
-        clip = clip.subclip(0, duration).without_audio()
-        
+        # УПРОЩЕННЫЙ МОНТАЖ (БЕЗ RESIZE)
+        clip = VideoFileClip(v_in).subclip(0, 7).without_audio()
         audio = AudioFileClip(a_in)
         final = clip.set_audio(audio)
         final.write_videofile(v_out, codec="libx264", audio_codec="aac", fps=24, logger=None)
@@ -74,7 +70,7 @@ async def scheduler():
 async def handle_msg(message: types.Message):
     if str(message.from_user.id) == str(MY_ID) and message.text.lower().startswith("сделай"):
         clean_text = message.text.lower().replace("сделай", "").strip()
-        msg = await message.answer("🛠 Создаю видео...")
+        msg = await message.answer("🛠 Собираю видео...")
         video = await create_video_logic(clean_text, message.from_user.id)
         if video:
             await message.answer_video(FSInputFile(video))
@@ -90,9 +86,7 @@ async def main():
     await runner.setup()
     await web.TCPSite(runner, '0.0.0.0', 10000).start()
     
-    # СБРОС КОНФЛИКТОВ
     await bot.delete_webhook(drop_pending_updates=True) 
-    
     asyncio.create_task(scheduler())
     await dp.start_polling(bot)
 
