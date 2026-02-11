@@ -2,52 +2,41 @@ import os
 import random
 import asyncio
 import logging
-from aiogram import Bot, Dispatcher
+from datetime import datetime
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
 from aiogram.types import FSInputFile
 from edge_tts import Communicate
 import aiohttp
 import aiofiles
 from aiohttp import web
-from datetime import datetime
 
-# Импорт MoviePy
+# Импорт MoviePy с защитой
 try:
     from moviepy.editor import VideoFileClip, AudioFileClip
 except ImportError:
     from moviepy import VideoFileClip, AudioFileClip
 
-# Данные из Environment Variables на Render
+# Берем данные из настроек Render
 TOKEN = os.getenv("BOT_TOKEN")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
-
-# Настройки каналов (Замени на свои ID или добавь в Environment)
-CHANNEL_PSY = os.getenv("CHANNEL_PSY") # ID канала про психологию
-CHANNEL_BIZ = os.getenv("CHANNEL_BIZ") # ID канала про бизнес
+CHANNEL_PSY = os.getenv("CHANNEL_PSY")  # Твоя опора
+CHANNEL_BIZ = os.getenv("CHANNEL_BIZ")  # Идея и доход
+MY_ID = os.getenv("MY_ID")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Контент для постов (примеры, можно дополнять)
-texts_psy = [
-    "Секрет спокойствия в умении отпускать то, что вы не можете контролировать.",
-    "Ваша ментальная гигиена так же важна, как и физическая. Сделайте паузу.",
-    "Психология успеха начинается с принятия своих поражений как опыта."
-]
+# Примеры текстов (можешь заменить на свои)
+texts_psy = ["Спокойствие — это суперсила. Сделайте глубокий вдох.", "Ваш путь уникален, не сравнивайте себя с другими."]
+texts_biz = ["Бизнес — это решение проблем других за деньги.", "Начните с малого, но думайте масштабно."]
 
-texts_biz = [
-    "Лучшая идея для бизнеса — та, которая решает реальную проблему людей.",
-    "Доход зависит не от того, сколько вы работаете, а от того, какую ценность создаете.",
-    "Малый бизнес сегодня — это фундамент большой экономики завтра."
-]
-
-# Веб-сервер для бесплатной работы на Render
 async def handle(request):
-    return web.Response(text="Бот-админ работает и планирует посты!")
+    return web.Response(text="Бот-админ работает 24/7!")
 
-async def create_video(text, chat_id):
+async def create_video_logic(text, chat_id):
     v_in, a_in, v_out = f"v_{chat_id}.mp4", f"a_{chat_id}.mp3", f"res_{chat_id}.mp4"
     headers = {"Authorization": PEXELS_API_KEY}
-    # Ищем видео природы для атмосферы
     url = "https://api.pexels.com/videos/search?query=nature&per_page=15&orientation=portrait"
 
     try:
@@ -78,45 +67,50 @@ async def create_video(text, chat_id):
         audio.close()
         return v_out
     except Exception as e:
-        logging.error(f"Ошибка видео: {e}")
+        logging.error(f"Ошибка монтажа: {e}")
         return None
     finally:
         for f in [v_in, a_in]:
             if os.path.exists(f): os.remove(f)
 
-# Функция для публикации поста
-async def send_daily_post(channel_id, texts):
+async def post_to_channel(channel_id, texts):
+    if not channel_id: return
     text = random.choice(texts)
-    video_path = await create_video(text, "auto")
-    if video_path:
-        await bot.send_video(channel_id, FSInputFile(video_path), caption=text)
-        os.remove(video_path)
+    video = await create_video_logic(text, "auto")
+    if video:
+        await bot.send_video(channel_id, FSInputFile(video), caption=text)
+        os.remove(video)
 
-# Планировщик задач
+# ПЛАНИРОВЩИК (Scheduler) для работы 24/7
 async def scheduler():
     while True:
         now = datetime.now().strftime("%H:%M")
-        # Постим в 09:00 и в 18:00
-        if now in ["09:00", "18:00"]:
-            if CHANNEL_PSY:
-                await send_daily_post(CHANNEL_PSY, texts_psy)
-            if CHANNEL_BIZ:
-                await send_daily_post(CHANNEL_BIZ, texts_biz)
-            await asyncio.sleep(65) # Чтобы не постить дважды в одну минуту
-        await asyncio.sleep(30)
+        # Посты в 09:00 и 18:00
+        if now == "09:00":
+            await post_to_channel(CHANNEL_PSY, texts_psy)
+        if now == "18:00":
+            await post_to_channel(CHANNEL_BIZ, texts_biz)
+        await asyncio.sleep(60)
+
+@dp.message(Command("test"))
+async def test_cmd(message: types.Message):
+    await message.answer("Запускаю тест видео для каналов...")
+    await post_to_channel(CHANNEL_PSY, texts_psy)
+    await post_to_channel(CHANNEL_BIZ, texts_biz)
 
 async def main():
-    # Запуск заглушки для бесплатного Render
+    # Запуск сервера для порта 10000 (бесплатно на Render)
     app = web.Application()
     app.router.add_get("/", handle)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', 10000)
-    await site.start() 
+    await site.start()
 
+    # Сброс старых обновлений (убирает Conflict)
     await bot.delete_webhook(drop_pending_updates=True)
     
-    # Запускаем планировщик фоном
+    # Запуск планировщика в фоне
     asyncio.create_task(scheduler())
     
     await dp.start_polling(bot)
@@ -124,4 +118,3 @@ async def main():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     asyncio.run(main())
-
