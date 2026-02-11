@@ -1,6 +1,6 @@
 aiogram
-edge-tts
 aiohttp
 aiofiles
-moviepy
+edge-tts
+moviepy==1.0.3
 proglog
